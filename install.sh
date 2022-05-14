@@ -2,11 +2,11 @@
 #
 # Initial Concept: Darryl H (https://github.com/darryl-h)
 # Maintainer: Darryl H (https://github.com/darryl-h)
-# Purpose: Installs the Omada Controller in Ubuntu 20.04 as per the
-#          instructions at https://www.tp-link.com/ca/support/faq/3272/
+# Purpose: Installs the Omada Controller in Ubuntu 20.04, with JRE 11 (instead of 8) as per the
+#          stale instructions at https://www.tp-link.com/ca/support/faq/3272/
 
 # Define the version
-Version=0.0009
+Version=0.1000
 # Define the log file
 LogFile=~/Omada-Install.log
 # Define colors
@@ -115,8 +115,20 @@ else
     WriteMessage "   OK" "apt system repos have been updated"
 fi
 
-# Install openjdk-11-jre-headless
+# If we are using JRE 11, we need to install/build a newer version of jsvc as per the docs
+AptInstall autoconf
+AptInstall make
+AptInstall gcc
 AptInstall openjdk-11-jre-headless
+AptInstall openjdk-11-jdk
+DownloadFile https://dlcdn.apache.org//commons/daemon/source commons-daemon-1.3.1-src.tar.gz
+tar -zxvf /tmp/commons-daemon-1.3.1-src.tar.gz --directory /opt >> ${LogFile} 2>&1
+cd /opt/commons-daemon*/src/native/unix
+sh support/buildconf.sh >> ${LogFile} 2>&1
+./configure --with-java=$(readlink -f "$( which java )" | sed "s:bin.*$::" | rev | cut -c2- | rev) >> ${LogFile} 2>&1
+make >> ${LogFile} 2>&1
+ln -s ${PWD}/jsvc /usr/bin/
+cd -
 
 # Install the GPG key
 wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - >> ${LogFile} 2>&1
@@ -127,9 +139,8 @@ apt update >> ${LogFile} 2>&1
 
 # Install MongoDB
 AptInstall mongodb-org
-
-# Install jsvc
-AptInstall jsvc
+# Start MongoDB
+systemctl enable --now mongod >> ${LogFile} 2>&1
 
 # Download the Omada package
 DownloadFile https://static.tp-link.com/upload/software/2022/202201/20220120 Omada_SDN_Controller_v5.0.30_linux_x64.deb
@@ -137,3 +148,6 @@ DownloadFile https://static.tp-link.com/upload/software/2022/202201/20220120 Oma
 # Install Omada Controller
 WriteMessage "INSTALL" "Installing the Omada software"
 dpkg --ignore-depends=jsvc -i /tmp/Omada_SDN_Controller_v5.0.30_linux_x64.deb
+
+echo "You SHOULD now be able to access the Omada Controller using:"
+echo "http://localhost:8088 or https://localhost:8043"
